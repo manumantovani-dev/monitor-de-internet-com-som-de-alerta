@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor de Internet</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #7c6fe0 0%, #9b6fc8 100%);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #fff; border-radius: 20px;
+      padding: 28px 24px 24px; width: 100%; max-width: 420px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .card-header { text-align: center; margin-bottom: 18px; }
+    .card-header .icon { font-size: 28px; margin-bottom: 6px; }
+    .card-header h1 { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+    .card-header p { font-size: 12px; color: #9a9ab0; margin-top: 3px; }
+
+    .status-btn {
+      width: 100%; padding: 15px; border-radius: 12px;
+      border: 2px solid #4ade80; background: #f0fdf4;
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; font-size: 16px; font-weight: 600; color: #16a34a;
+      margin-bottom: 14px; transition: all 0.4s;
+    }
+    .status-btn.offline { border-color: #f87171; background: #fef2f2; color: #dc2626; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; animation: blink 1.8s infinite; }
+    .status-dot.offline { background: #ef4444; animation: none; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+    .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .metric-box { background: #f8f8fc; border-radius: 12px; padding: 13px 15px; }
+    .m-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #9a9ab0; margin-bottom: 4px; }
+    .m-value { font-size: 21px; font-weight: 700; color: #1a1a2e; }
+    .m-value.good { color: #16a34a; }
+    .m-value.warn { color: #d97706; }
+    .m-value.bad  { color: #dc2626; }
+
+    .speed-box { background: #f8f8fc; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+    .speed-title { font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+    .speed-status { font-size: 10px; color: #9a9ab0; font-weight: 400; }
+    .speed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .speed-cell { text-align: center; }
+    .sc-label { font-size: 10px; color: #9a9ab0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .sc-value { font-size: 19px; font-weight: 700; color: #1a1a2e; line-height: 1; }
+    .sc-unit { font-size: 10px; color: #9a9ab0; margin-top: 1px; }
+
+    /* histórico */
+    .history-box { background: #f8f8fc; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+    .history-top {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .history-top-title { font-size: 12px; font-weight: 600; color: #6b7280; }
+    .autosave-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; color: #16a34a; background: #f0fdf4;
+      border: 1px solid #bbf7d0; border-radius: 20px; padding: 2px 7px; font-weight: 500;
+    }
+    .as-dot { width: 5px; height: 5px; border-radius: 50%; background: #22c55e; display: inline-block; }
+    .h-actions { margin-left: auto; display: flex; gap: 6px; }
+    .h-btn {
+      font-size: 10px; background: none;
+      border: 1px solid #e0e0ee; border-radius: 6px;
+      padding: 3px 10px; color: #9a9ab0; cursor: pointer;
+      font-family: 'Inter', sans-serif; font-weight: 500;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .h-btn:hover { color: #7c6fe0; border-color: #7c6fe0; }
+    .h-btn.danger { border-color: #fecaca; color: #ef4444; }
+    .h-btn.danger:hover { background: #fef2f2; }
+
+    .history-scroll { max-height: 130px; overflow-y: auto; }
+    .history-scroll::-webkit-scrollbar { width: 3px; }
+    .history-scroll::-webkit-scrollbar-thumb { background: #e0e0ee; border-radius: 3px; }
+    .h-item { font-size: 12px; padding: 3px 0; display: flex; align-items: center; gap: 6px; animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(-3px)} to{opacity:1;} }
+    .h-item .h-time { color: #22c55e; font-weight: 500; min-width: 72px; }
+    .h-item.ev-down .h-time { color: #ef4444; }
+    .h-item.ev-speed .h-time { color: #7c6fe0; }
+    .h-item .h-msg { color: #555; flex: 1; }
+    .h-item .h-dur { color: #aaa; font-size: 11px; }
+    .empty { color: #bbb; font-size: 12px; text-align: center; padding: 8px 0; }
+
+    /* próxima checagem — texto simples, sem barra */
+    .next-check-label {
+      font-size: 11px; color: #bbb; text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .settings { display: flex; flex-direction: column; gap: 10px; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #555; }
+    .s-label { font-weight: 500; }
+    .interval-input { display: flex; align-items: center; gap: 8px; }
+    .interval-input input[type=number] {
+      width: 56px; padding: 5px 8px; border: 1.5px solid #e0e0ee;
+      border-radius: 8px; font-size: 13px; font-family: 'Inter', sans-serif;
+      color: #1a1a2e; text-align: center; outline: none; transition: border-color 0.2s;
+    }
+    .interval-input input[type=number]:focus { border-color: #7c6fe0; }
+    .interval-input span { font-size: 12px; color: #aaa; }
+    .toggle { position: relative; width: 38px; height: 22px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .t-slider { position: absolute; inset: 0; background: #e0e0ee; border-radius: 22px; cursor: pointer; transition: background 0.3s; }
+    .t-slider::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #fff; border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,0.15); transition: transform 0.3s; }
+    .toggle input:checked + .t-slider { background: #7c6fe0; }
+    .toggle input:checked + .t-slider::after { transform: translateX(16px); }
+
+    .test-sound-btn {
+      font-size: 11px; font-weight: 600; font-family: 'Inter', sans-serif;
+      background: none; border: 1.5px solid #e0e0ee; border-radius: 8px;
+      padding: 5px 14px; color: #7c6fe0; cursor: pointer; transition: all 0.2s;
+    }
+    .test-sound-btn:hover { border-color: #7c6fe0; background: #f5f3ff; }
+
+    .toast {
+      position: fixed; top: 20px; left: 50%;
+      transform: translateX(-50%) translateY(-80px);
+      padding: 11px 22px; border-radius: 40px;
+      font-size: 13px; font-weight: 600;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+      transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 999; white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.online-toast  { background: #22c55e; color: #fff; }
+    .toast.offline-toast { background: #ef4444; color: #fff; }
+    .toast.info-toast    { background: #7c6fe0; color: #fff; }
+  </style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="icon">🌐</div>
+    <h1>Monitor de Internet</h1>
+    <p>Monitoramento em tempo real da sua conexão</p>
+  </div>
+
+  <div class="status-btn" id="statusBtn">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Verificando...</span>
+  </div>
+
+  <div class="metrics">
+    <div class="metric-box">
+      <div class="m-label">Uptime</div>
+      <div class="m-value good" id="metUptime">—</div>
+    </div>
+    <div class="metric-box">
+      <div class="m-label">Quedas</div>
+      <div class="m-value" id="metQuedas">0</div>
+    </div>
+    <div class="metric-box">
+      <div class="m-label">Última Checagem</div>
+      <div class="m-value" id="metChecagem" style="font-size:18px">—</div>
+    </div>
+    <div class="metric-box">
+      <div class="m-label">Latência</div>
+      <div class="m-value" id="metLatencia">—</div>
+    </div>
+  </div>
+
+  <div class="speed-box">
+    <div class="speed-title">
+      ⚡ Velocidade de Download
+      <span class="speed-status" id="speedStatus">atualiza a cada checagem</span>
+    </div>
+    <div class="speed-grid">
+      <div class="speed-cell">
+        <div class="sc-label">Download</div>
+        <div class="sc-value" id="speedDown">—</div>
+        <div class="sc-unit">Mbps</div>
+      </div>
+      <div class="speed-cell">
+        <div class="sc-label">Ping</div>
+        <div class="sc-value" id="speedPing">—</div>
+        <div class="sc-unit">ms</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="history-box">
+    <div class="history-top">
+      <span class="history-top-title">📋 Histórico</span>
+      <span class="autosave-badge"><span class="as-dot"></span> Auto-salvo</span>
+      <div class="h-actions">
+        <button class="h-btn" onclick="exportHistory()">⬇ Exportar</button>
+        <button class="h-btn danger" onclick="clearHistory()">🗑 Apagar histórico</button>
+      </div>
+    </div>
+    <div class="history-scroll" id="historyScroll">
+      <div class="empty">Nenhum evento registrado</div>
+    </div>
+  </div>
+
+  <div class="next-check-label">Próxima verificação em <span id="countdown">—</span>s</div>
+
+  <div class="settings">
+    <div class="setting-row">
+      <span class="s-label">Intervalo (segundos)</span>
+      <div class="interval-input">
+        <input type="number" id="intervalInput" min="2" max="120" value="10">
+        <span>seg</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="s-label">Som de alerta</span>
+      <button class="test-sound-btn" onclick="testSound()">🔊 Testar som</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let isOnline     = null;
+  let totalChecks  = 0;
+  let onlineChecks = 0;
+  let failCount    = 0;
+  let downSince    = null;
+  let events       = [];
+  let intervalSec  = 30;
+  let cTimer       = null;
+  let toastTimeout = null;
+  let checking     = false;
+
+  const $ = id => document.getElementById(id);
+
+  // ── LocalStorage ─────────────────────────────────────────
+  function loadSaved() {
+    try {
+      const s = localStorage.getItem('monitor_events');
+      if (s) {
+        events = JSON.parse(s);
+        failCount    = events.filter(e => e.type === 'down').length;
+        totalChecks  = events.filter(e => e.type === 'up' || e.type === 'down').length;
+        onlineChecks = events.filter(e => e.type === 'up').length;
+        $('metQuedas').textContent = failCount;
+        $('metQuedas').className = 'm-value ' + (failCount === 0 ? '' : failCount < 3 ? 'warn' : 'bad');
+        renderHistory();
+      }
+    } catch(e) {}
+  }
+  function saveHistory() {
+    try { localStorage.setItem('monitor_events', JSON.stringify(events.slice(0,200))); } catch(e) {}
+  }
+
+  // ── Som automático ────────────────────────────────────────
+  function playTone(online) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.frequency.value = online ? 880 : 260;
+      osc.type = online ? 'sine' : 'sawtooth';
+      g.gain.setValueAtTime(0.28, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+      osc.start(); osc.stop(ctx.currentTime + 0.8);
+    } catch(e) {}
+  }
+  function testSound() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const play = (freq, type, delay) => {
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.frequency.value = freq; osc.type = type;
+        g.gain.setValueAtTime(0.25, ctx.currentTime + delay);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.8);
+        osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + 0.8);
+      };
+      play(880, 'sine', 0);       // som de voltar online
+      play(260, 'sawtooth', 1.0); // som de cair
+      showToast('🔊 Testando sons...', 'info-toast');
+    } catch(e) { showToast('Erro ao tocar som', 'info-toast'); }
+  }
+
+  // ── Ciclo de checagem (conexão + velocidade juntos) ──────
+  async function runCycle() {
+    if (checking) return;
+    checking = true;
+    $('speedStatus').textContent = 'medindo...';
+
+    // 1. Ping (3x)
+    const pings = [];
+    for (let i = 0; i < 3; i++) {
+      const t0 = Date.now();
+      let ok = false;
+      try {
+        await fetch('https://www.google.com/favicon.ico?_=' + Date.now(), {
+          method: 'HEAD', mode: 'no-cors', cache: 'no-store',
+          signal: AbortSignal.timeout(4000)
+        });
+        ok = true;
+      } catch {}
+      pings.push({ lat: Date.now() - t0, ok });
+      await sleep(150);
+    }
+
+    const online = pings.some(p => p.ok);
+    const goodPings = pings.filter(p => p.ok).map(p => p.lat);
+    const avgPing = goodPings.length ? Math.round(goodPings.reduce((a,b)=>a+b,0)/goodPings.length) : null;
+    const pingVar = goodPings.length > 1 ? Math.round(Math.max(...goodPings) - Math.min(...goodPings)) : null;
+
+    // 2. Status de conexão
+    totalChecks++;
+    $('metChecagem').textContent = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+    if (online) {
+      onlineChecks++;
+      $('metLatencia').textContent = (avgPing ?? '—') + ' ms';
+      $('metLatencia').className = 'm-value ' + (avgPing < 100 ? 'good' : avgPing < 300 ? 'warn' : 'bad');
+
+      if (isOnline !== true) {
+        const dur = downSince ? Math.round((Date.now() - downSince)/1000) : null;
+        isOnline = true;
+        setStatus(true);
+        addEvent('up', 'Conexão restaurada', dur ? formatDur(dur) : '');
+        showToast('✅ Conexão restaurada!', 'online-toast');
+        playTone(true);
+      }
+    } else {
+      $('metLatencia').textContent = '—';
+      $('metLatencia').className = 'm-value bad';
+      if (isOnline !== false) {
+        isOnline = false; downSince = Date.now(); failCount++;
+        setStatus(false);
+        addEvent('down', 'Internet caiu', '');
+        showToast('⚠️ Internet caiu!', 'offline-toast');
+        playTone(false);
+        $('metQuedas').textContent = failCount;
+        $('metQuedas').className = 'm-value ' + (failCount < 2 ? 'warn' : 'bad');
+      }
+      $('speedStatus').textContent = 'sem conexão';
+      checking = false;
+      updateUptime();
+      return;
+    }
+
+    // 3. Velocidade de download (~1MB Cloudflare)
+    let mbps = null;
+    try {
+      const t0 = Date.now();
+      const resp = await fetch('https://speed.cloudflare.com/__down?bytes=1000000&_=' + Date.now(), {
+        cache: 'no-store', signal: AbortSignal.timeout(12000)
+      });
+      const buf = await resp.arrayBuffer();
+      const secs = (Date.now() - t0) / 1000;
+      mbps = parseFloat(((buf.byteLength * 8) / secs / 1_000_000).toFixed(2));
+    } catch {}
+
+    // 4. Exibe velocidade
+    $('speedDown').textContent = mbps !== null ? mbps : '—';
+    $('speedPing').textContent = avgPing !== null ? avgPing : '—';
+
+    // 5. Histórico de velocidade
+    if (mbps !== null || avgPing !== null) {
+      const det = [mbps ? mbps + ' Mbps' : null, avgPing ? avgPing + 'ms ping' : null].filter(Boolean).join(' · ');
+      addEvent('speed', 'Velocidade medida', det);
+    }
+
+    $('speedStatus').textContent = 'atualiza a cada checagem';
+    checking = false;
+    updateUptime();
+  }
+
+  function updateUptime() {
+    const pct = totalChecks > 0 ? (onlineChecks/totalChecks*100).toFixed(1) : '100.0';
+    $('metUptime').textContent = pct + '%';
+    $('metUptime').className = 'm-value ' + (parseFloat(pct) >= 95 ? 'good' : parseFloat(pct) >= 80 ? 'warn' : 'bad');
+  }
+
+  function setStatus(online) {
+    $('statusBtn').className  = 'status-btn' + (online ? '' : ' offline');
+    $('statusDot').className  = 'status-dot' + (online ? '' : ' offline');
+    $('statusText').textContent = online ? 'Online ✓' : 'Offline ✗';
+  }
+
+  // ── Histórico ─────────────────────────────────────────────
+  function addEvent(type, msg, detail) {
+    events.unshift({ type, msg, detail, time: formatTime(new Date()), ts: Date.now() });
+    if (events.length > 200) events.pop();
+    renderHistory();
+    saveHistory();
+  }
+  function renderHistory() {
+    if (!events.length) {
+      $('historyScroll').innerHTML = '<div class="empty">Nenhum evento registrado</div>';
+      return;
+    }
+    $('historyScroll').innerHTML = events.map(e => `
+      <div class="h-item ${e.type === 'down' ? 'ev-down' : e.type === 'speed' ? 'ev-speed' : ''}">
+        <span class="h-time">[${e.time}]</span>
+        <span class="h-msg">${e.msg}</span>
+        <span class="h-dur">${e.detail || ''}</span>
+      </div>`).join('');
+  }
+  function clearHistory() {
+    if (!confirm('Apagar todo o histórico salvo?')) return;
+    events = []; failCount = 0; totalChecks = 0; onlineChecks = 0;
+    $('metQuedas').textContent = '0'; $('metQuedas').className = 'm-value';
+    $('metUptime').textContent = '—';
+    localStorage.removeItem('monitor_events');
+    renderHistory();
+  }
+  function exportHistory() {
+    if (!events.length) { alert('Nenhum evento para exportar.'); return; }
+    const lines = ['Data/Hora,Evento,Detalhe'];
+    events.forEach(e => lines.push(`"${e.time}","${e.msg}","${e.detail || ''}"`));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'historico-internet-' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click(); URL.revokeObjectURL(url);
+  }
+
+
+  // ── Toast ─────────────────────────────────────────────────
+  function showToast(msg, cls) {
+    const t = $('toast');
+    t.textContent = msg; t.className = 'toast show ' + cls;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => { t.className = 'toast'; }, 3500);
+  }
+
+  // ── Countdown simples ─────────────────────────────────────
+  function startCountdown() {
+    if (cTimer) clearInterval(cTimer);
+    let cv = intervalSec;
+    $('countdown').textContent = cv;
+    cTimer = setInterval(() => {
+      cv--;
+      $('countdown').textContent = cv;
+      if (cv <= 0) {
+        cv = intervalSec;
+        runCycle();
+      }
+    }, 1000);
+  }
+
+  $('intervalInput').addEventListener('change', () => {
+    let v = parseInt($('intervalInput').value);
+    if (isNaN(v) || v < 2) v = 2;
+    if (v > 120) v = 120;
+    $('intervalInput').value = v;
+    intervalSec = v;
+    startCountdown();
+  });
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function formatTime(d) { return d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+  function formatDur(s) {
+    if (s < 60) return s + 's';
+    if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+    return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+  }
+
+  // ── Init ──────────────────────────────────────────────────
+  loadSaved();
+  addEvent('info', 'Monitor iniciado', '');
+  runCycle();
+  startCountdown();
+</script>
+</body>
+</html>
